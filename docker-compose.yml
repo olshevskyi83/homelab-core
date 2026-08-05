@@ -1,0 +1,23 @@
+services:
+  ai-gateway:
+    build: .
+    container_name: ai-gateway
+    restart: unless-stopped
+
+    user: "1000:1000"
+
+    env_file:
+      - .env
+
+    ports:
+      - "3010:8080"
+
+    volumes:
+      - ./data:/app/data
+
+    networks:
+      - ai-network
+
+networks:
+  ai-network:
+    external: true
