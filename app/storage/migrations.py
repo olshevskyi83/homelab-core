@@ -42,8 +42,42 @@ async def migration_1(database: aiosqlite.Connection) -> None:
     )
 
 
+async def migration_2(database: aiosqlite.Connection) -> None:
+    """
+    Knowledge-document indexing state for Qdrant.
+    """
+    await database.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS knowledge_documents (
+            document_id TEXT PRIMARY KEY,
+            task_id TEXT UNIQUE,
+            source_type TEXT NOT NULL,
+            project TEXT NOT NULL,
+            source_filename TEXT,
+            text_path TEXT,
+
+            index_status TEXT NOT NULL DEFAULT 'not_indexed',
+            chunk_count INTEGER NOT NULL DEFAULT 0,
+            embedding_model TEXT,
+            collection_name TEXT,
+
+            indexed_at TEXT,
+            updated_at TEXT NOT NULL,
+            error TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_knowledge_documents_status
+        ON knowledge_documents(index_status);
+
+        CREATE INDEX IF NOT EXISTS idx_knowledge_documents_source_type
+        ON knowledge_documents(source_type);
+        """
+    )
+
+
 MIGRATIONS: dict[int, MigrationFunction] = {
     1: migration_1,
+    2: migration_2,
 }
 
 

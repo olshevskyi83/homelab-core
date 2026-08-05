@@ -57,6 +57,55 @@ class Settings:
         in {"1", "true", "yes", "on"}
     )
 
+    audio_root = os.environ.get(
+        "AUDIO_ROOT",
+        "/remote/Audio",
+    )
+
+    whisper_worker_poll_seconds = float(
+        os.environ.get(
+            "WHISPER_WORKER_POLL_SECONDS",
+            "5",
+        )
+    )
+
+    audio_watcher_poll_seconds = float(
+        os.environ.get(
+            "AUDIO_WATCHER_POLL_SECONDS",
+            "5",
+        )
+    )
+
+    audio_file_settle_seconds = float(
+        os.environ.get(
+            "AUDIO_FILE_SETTLE_SECONDS",
+            "10",
+        )
+    )
+
+    qdrant_url = os.environ.get(
+        "QDRANT_URL",
+        "http://qdrant:6333",
+    ).rstrip("/")
+
+    qdrant_collection = os.environ.get(
+        "QDRANT_COLLECTION",
+        "homelab_knowledge",
+    )
+
+    embedding_model = os.environ.get(
+        "EMBEDDING_MODEL",
+        "nomic-embed",
+    )
+
+    knowledge_chunk_size = int(
+        os.environ.get("KNOWLEDGE_CHUNK_SIZE", "1200")
+    )
+
+    knowledge_chunk_overlap = int(
+        os.environ.get("KNOWLEDGE_CHUNK_OVERLAP", "200")
+    )
+
     @property
     def mac_agent_url(self) -> str:
         return f"http://{self.mac_host}:{self.mac_agent_port}"

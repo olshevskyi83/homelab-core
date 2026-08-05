@@ -61,3 +61,47 @@ async def chat_completion(
 
     response.raise_for_status()
     return response.json()
+
+
+async def embeddings(
+    texts: list[str],
+    model: str,
+) -> list[list[float]]:
+    if not texts:
+        return []
+
+    async with httpx.AsyncClient(timeout=1800.0) as client:
+        response = await client.post(
+            f"{settings.litellm_url}/v1/embeddings",
+            headers=auth_headers(),
+            json={
+                "model": model,
+                "input": texts,
+            },
+        )
+
+    response.raise_for_status()
+    payload = response.json()
+
+    items = payload.get("data", [])
+
+    if not isinstance(items, list):
+        raise RuntimeError("Invalid embeddings response")
+
+    ordered = sorted(
+        items,
+        key=lambda item: int(item.get("index", 0)),
+    )
+
+    vectors: list[list[float]] = []
+
+    for item in ordered:
+        vector = item.get("embedding")
+
+        if not isinstance(vector, list) or not vector:
+            raise RuntimeError("Embedding vector is missing")
+
+        vectors.append([float(value) for value in vector])
+
+    return vectors
+
