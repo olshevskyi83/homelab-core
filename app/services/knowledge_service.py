@@ -292,3 +292,116 @@ async def search_knowledge(
         "count": len(results),
         "results": results,
     }
+
+
+async def chat_with_knowledge(
+    query: str,
+    *,
+    model: str = "qwen-general",
+    limit: int = 5,
+    source_type: str | None = None,
+    project: str | None = None,
+    score_threshold: float | None = None,
+    temperature: float = 0.2,
+) -> dict:
+    search = await search_knowledge(
+        query,
+        limit=limit,
+        source_type=source_type,
+        project=project,
+        score_threshold=score_threshold,
+    )
+
+    results = search["results"]
+
+    if not results:
+        return {
+            "query": search["query"],
+            "answer": (
+                "У базі знань не знайдено релевантних "
+                "джерел для відповіді."
+            ),
+            "model": model,
+            "sources": [],
+            "usage": None,
+        }
+
+    context_blocks: list[str] = []
+
+    for index, result in enumerate(results, start=1):
+        filename = result.get("source_filename") or "Без назви"
+        text = str(result.get("text") or "").strip()
+
+        context_blocks.append(
+            f"[Джерело {index}]\n"
+            f"Файл: {filename}\n"
+            f"Текст: {text}"
+        )
+
+    context = "\n\n".join(context_blocks)
+
+    system_prompt = (
+        "Ти відповідаєш лише на основі переданих джерел із "
+        "локальної бази знань. Не вигадуй фактів, яких немає "
+        "у контексті. Якщо інформації недостатньо, прямо скажи "
+        "про це. Відповідай мовою запиту. Для важливих тверджень "
+        "вказуй номер джерела у форматі [Джерело 1]."
+    )
+
+    user_prompt = (
+        f"Питання:\n{search['query']}\n\n"
+        f"Джерела:\n{context}\n\n"
+        "Сформуй чітку відповідь."
+    )
+
+    completion = await litellm.chat_completion(
+        {
+            "model": model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt,
+                },
+            ],
+            "temperature": temperature,
+        }
+    )
+
+    choices = completion.get("choices") or []
+
+    if not choices:
+        raise RuntimeError("LLM response contains no choices")
+
+    message = choices[0].get("message") or {}
+    answer = str(message.get("content") or "").strip()
+
+    if not answer:
+        raise RuntimeError("LLM returned an empty answer")
+
+    sources = [
+        {
+            "number": index,
+            "source_filename": result.get("source_filename"),
+            "score": result.get("score"),
+            "document_id": result.get("document_id"),
+            "task_id": result.get("task_id"),
+            "source_type": result.get("source_type"),
+            "project": result.get("project"),
+            "chunk_index": result.get("chunk_index"),
+            "chunk_count": result.get("chunk_count"),
+            "text": result.get("text"),
+        }
+        for index, result in enumerate(results, start=1)
+    ]
+
+    return {
+        "query": search["query"],
+        "answer": answer,
+        "model": completion.get("model") or model,
+        "sources": sources,
+        "usage": completion.get("usage"),
+    }
