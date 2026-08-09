@@ -258,6 +258,38 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
             "Knowledge document not found",
         )
 
+    def test_search_diversifies_chunks_across_documents(self) -> None:
+        points = [
+            {
+                "id": f"book-{index}",
+                "score": 0.9 - index / 100,
+                "payload": {"document_id": "book"},
+            }
+            for index in range(10)
+        ]
+        points.extend(
+            [
+                {
+                    "id": "audio-1",
+                    "score": 0.6,
+                    "payload": {"document_id": "audio-1"},
+                },
+                {
+                    "id": "audio-2",
+                    "score": 0.5,
+                    "payload": {"document_id": "audio-2"},
+                },
+            ]
+        )
+
+        selected = knowledge_service.diversify_search_points(points, 5)
+
+        self.assertEqual(
+            [point["payload"]["document_id"] for point in selected[:3]],
+            ["book", "audio-1", "audio-2"],
+        )
+        self.assertEqual(len(selected), 5)
+
 
 class EndpointCompatibilityTests(unittest.TestCase):
     def test_generic_document_routes_are_exposed(self) -> None:

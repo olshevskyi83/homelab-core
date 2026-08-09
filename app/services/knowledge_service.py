@@ -53,6 +53,36 @@ def split_text(text: str) -> list[str]:
     return chunks
 
 
+def diversify_search_points(
+    points: list[dict],
+    limit: int,
+) -> list[dict]:
+    """Round-robin ranked chunks so one document cannot fill all context."""
+    buckets: dict[str, list[dict]] = {}
+
+    for point in points:
+        payload = point.get("payload") or {}
+        document_id = str(
+            payload.get("document_id") or point.get("id") or "unknown"
+        )
+        buckets.setdefault(document_id, []).append(point)
+
+    selected: list[dict] = []
+
+    while len(selected) < limit:
+        added = False
+
+        for bucket in buckets.values():
+            if bucket and len(selected) < limit:
+                selected.append(bucket.pop(0))
+                added = True
+
+        if not added:
+            break
+
+    return selected
+
+
 def resolve_document_path(path: str) -> Path:
     documents_root = Path(settings.documents_root).resolve()
     candidate = Path(path)
@@ -348,13 +378,15 @@ async def search_knowledge(
     if not vectors:
         raise RuntimeError("Could not create query embedding")
 
-    points = await qdrant.search_points(
+    candidate_limit = min(max(limit * 5, limit), 100)
+    candidates = await qdrant.search_points(
         vectors[0],
-        limit=limit,
+        limit=candidate_limit,
         score_threshold=score_threshold,
         source_type=source_type,
         project=project,
     )
+    points = diversify_search_points(candidates, limit)
 
     results = []
 

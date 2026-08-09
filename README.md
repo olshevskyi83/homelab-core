@@ -68,7 +68,9 @@ The adapter searches the central Qdrant collection, sends the retrieved
 context and conversation history to `KNOWLEDGE_CHAT_MODEL`, and includes the
 matched source filenames in the assistant response. It does not create a
 second Open WebUI Knowledge index. `KNOWLEDGE_CHAT_LIMIT` controls how many
-cross-source chunks are available to each answer.
+cross-source chunks are available to each answer. Retrieval over-fetches
+candidates and selects them in document-diverse rounds so a single large PDF
+cannot displace every Audio Lab or other document source from the context.
 
 Installation
 cp .env.example .env
