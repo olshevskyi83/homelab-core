@@ -1,38 +1,36 @@
-# Secrets
+# Secrets and local environment
 .env
 .env.*
 !.env.example
 
-# Runtime data
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Runtime state
 data/
+logs/
+*.log
+*.sqlite
+*.sqlite3
 *.db
 *.db-wal
 *.db-shm
 
-# Python
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-.pytest_cache/
-.mypy_cache/
+# Downloaded/local models
+models/
+.cache/
 
-# Logs
-logs/
-*.log
-
-# Backups
-*.backup
-*.backup-*
-backup/
-snapshots/
-
-# Editors and OS
-.vscode/
-.idea/
-.DS_Store
-
-# Temporary files
+# Temporary and backup files
 *.tmp
-*.swp
+*.bak
+*.backup*
 *~
+.DS_Store
