@@ -70,7 +70,9 @@ matched source filenames in the assistant response. It does not create a
 second Open WebUI Knowledge index. `KNOWLEDGE_CHAT_LIMIT` controls how many
 cross-source chunks are available to each answer. Retrieval uses Qdrant's
 native grouping by `document_id`, so a single large PDF cannot displace every
-Audio Lab or other document source from the context.
+Audio Lab or other document source from the context. The OpenAI-compatible
+response lists only sources explicitly cited by the generated answer; the raw
+`/knowledge/chat` response retains all retrieved candidates for diagnostics.
 
 Installation
 cp .env.example .env

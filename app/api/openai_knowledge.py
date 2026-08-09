@@ -1,4 +1,5 @@
 import json
+import re
 import time
 from typing import Any
 from uuid import uuid4
@@ -78,6 +79,18 @@ def _answer_with_sources(result: dict) -> str:
 
     if not sources:
         return answer
+
+    cited_numbers = {
+        int(number)
+        for number in re.findall(r"\[Джерело\s+(\d+)\]", answer)
+    }
+
+    if cited_numbers:
+        sources = [
+            source
+            for source in sources
+            if source.get("number") in cited_numbers
+        ]
 
     lines = ["", "---", "Джерела:"]
     for source in sources:

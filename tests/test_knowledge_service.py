@@ -340,13 +340,18 @@ class OpenAIKnowledgeCompatibilityTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
         result = {
-            "answer": "Відповідь із бази.",
+            "answer": "Відповідь із бази [Джерело 1].",
             "sources": [
                 {
                     "number": 1,
                     "source_filename": "book.pdf",
                     "score": 0.91,
-                }
+                },
+                {
+                    "number": 2,
+                    "source_filename": "unused.pdf",
+                    "score": 0.88,
+                },
             ],
             "usage": {"total_tokens": 10},
         }
@@ -360,8 +365,9 @@ class OpenAIKnowledgeCompatibilityTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response["object"], "chat.completion")
         content = response["choices"][0]["message"]["content"]
-        self.assertIn("Відповідь із бази.", content)
+        self.assertIn("Відповідь із бази", content)
         self.assertIn("[1] book.pdf", content)
+        self.assertNotIn("unused.pdf", content)
         chat.assert_awaited_once()
         self.assertEqual(chat.await_args.args[0], "Уточни відповідь")
         self.assertEqual(
