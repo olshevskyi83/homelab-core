@@ -302,16 +302,12 @@ class EndpointCompatibilityTests(unittest.TestCase):
 
 
 class OpenAIKnowledgeCompatibilityTests(unittest.IsolatedAsyncioTestCase):
-    async def test_models_exposes_global_and_project_scopes(self) -> None:
+    async def test_models_exposes_single_knowledge_model(self) -> None:
         result = await list_knowledge_models()
 
         self.assertEqual(
-            {model["id"] for model in result["data"]},
-            {
-                "homelab-knowledge",
-                "homelab-audio",
-                "homelab-documents",
-            },
+            [model["id"] for model in result["data"]],
+            ["homelab-knowledge"],
         )
 
     async def test_chat_maps_history_and_sources_to_openai_response(self) -> None:
@@ -352,46 +348,10 @@ class OpenAIKnowledgeCompatibilityTests(unittest.IsolatedAsyncioTestCase):
             len(chat.await_args.kwargs["conversation_messages"]),
             3,
         )
-
-    async def test_audio_model_scopes_retrieval_to_audio_lab(self) -> None:
-        request = ChatCompletionRequest(
-            model="homelab-audio",
-            messages=[{"role": "user", "content": "Німецькі дієслова"}],
+        self.assertEqual(
+            chat.await_args.kwargs["limit"],
+            settings.knowledge_chat_limit,
         )
-
-        with patch.object(
-            knowledge_service,
-            "chat_with_knowledge",
-            AsyncMock(
-                return_value={"answer": "Antwort", "sources": [], "usage": None}
-            ),
-        ) as chat:
-            response = await knowledge_chat_completion(request)
-
-        self.assertEqual(response["model"], "homelab-audio")
-        self.assertEqual(chat.await_args.kwargs["project"], "audio-lab")
-
-    async def test_document_model_scopes_retrieval_to_document_lab(self) -> None:
-        request = ChatCompletionRequest(
-            model="homelab-documents",
-            messages=[{"role": "user", "content": "Знайди документ"}],
-        )
-
-        with patch.object(
-            knowledge_service,
-            "chat_with_knowledge",
-            AsyncMock(
-                return_value={
-                    "answer": "Документ",
-                    "sources": [],
-                    "usage": None,
-                }
-            ),
-        ) as chat:
-            response = await knowledge_chat_completion(request)
-
-        self.assertEqual(response["model"], "homelab-documents")
-        self.assertEqual(chat.await_args.kwargs["project"], "document-lab")
 
 if __name__ == "__main__":
     unittest.main()

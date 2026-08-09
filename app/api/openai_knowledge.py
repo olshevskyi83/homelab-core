@@ -13,20 +13,7 @@ from app.services import knowledge_service
 
 router = APIRouter(prefix="/v1", tags=["openai-compatible"])
 
-KNOWLEDGE_MODELS = {
-    "homelab-knowledge": {
-        "name": "Homelab Knowledge",
-        "project": None,
-    },
-    "homelab-audio": {
-        "name": "Homelab Audio",
-        "project": "audio-lab",
-    },
-    "homelab-documents": {
-        "name": "Homelab Documents",
-        "project": "document-lab",
-    },
-}
+KNOWLEDGE_MODEL_ID = "homelab-knowledge"
 
 
 class ChatMessage(BaseModel):
@@ -109,21 +96,19 @@ async def list_knowledge_models() -> dict:
         "object": "list",
         "data": [
             {
-                "id": model_id,
-                "name": config["name"],
+                "id": KNOWLEDGE_MODEL_ID,
+                "name": "Homelab Knowledge",
                 "object": "model",
                 "created": 0,
                 "owned_by": "homelab-core",
             }
-            for model_id, config in KNOWLEDGE_MODELS.items()
         ],
     }
 
 
 @router.post("/chat/completions")
 async def knowledge_chat_completion(request: ChatCompletionRequest):
-    model_config = KNOWLEDGE_MODELS.get(request.model)
-    if model_config is None:
+    if request.model != KNOWLEDGE_MODEL_ID:
         raise HTTPException(status_code=404, detail="Model not found")
 
     try:
@@ -132,7 +117,7 @@ async def knowledge_chat_completion(request: ChatCompletionRequest):
             query,
             model=settings.knowledge_chat_model,
             conversation_messages=messages,
-            project=model_config["project"],
+            limit=settings.knowledge_chat_limit,
             temperature=request.temperature,
         )
     except ValueError as exc:

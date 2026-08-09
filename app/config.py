@@ -108,6 +108,10 @@ class Settings:
         "qwen-general",
     )
 
+    knowledge_chat_limit = int(
+        os.environ.get("KNOWLEDGE_CHAT_LIMIT", "10")
+    )
+
     knowledge_chunk_size = int(
         os.environ.get("KNOWLEDGE_CHUNK_SIZE", "1200")
     )

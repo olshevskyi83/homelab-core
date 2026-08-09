@@ -61,16 +61,14 @@ Open WebUI can use Homelab Knowledge as an OpenAI-compatible model through:
 ```text
 GET  /v1/models
 POST /v1/chat/completions
-models:
-  homelab-knowledge  (all indexed sources)
-  homelab-audio      (Audio Lab only)
-  homelab-documents  (Document Lab only)
+model: homelab-knowledge
 ```
 
 The adapter searches the central Qdrant collection, sends the retrieved
 context and conversation history to `KNOWLEDGE_CHAT_MODEL`, and includes the
 matched source filenames in the assistant response. It does not create a
-second Open WebUI Knowledge index.
+second Open WebUI Knowledge index. `KNOWLEDGE_CHAT_LIMIT` controls how many
+cross-source chunks are available to each answer.
 
 Installation
 cp .env.example .env
