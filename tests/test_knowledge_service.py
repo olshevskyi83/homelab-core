@@ -19,6 +19,7 @@ from app.api.openai_knowledge import (
     router as openai_knowledge_router,
 )
 from app.config import settings
+from app.providers import qdrant
 from app.services import knowledge_service
 
 
@@ -57,6 +58,26 @@ class DocumentPathTests(unittest.TestCase):
                 knowledge_service.resolve_document_path(str(link))
         finally:
             outside.unlink()
+
+
+class QdrantGroupingTests(unittest.TestCase):
+    def test_flattens_one_hit_per_document_before_second_hits(self) -> None:
+        groups = [
+            {"id": "book", "hits": [{"id": "book-1"}, {"id": "book-2"}]},
+            {"id": "audio-1", "hits": [{"id": "audio-1"}]},
+            {"id": "audio-2", "hits": [{"id": "audio-2"}]},
+        ]
+
+        points = qdrant.flatten_point_groups(
+            groups,
+            limit=4,
+            group_size=2,
+        )
+
+        self.assertEqual(
+            [point["id"] for point in points],
+            ["book-1", "audio-1", "audio-2", "book-2"],
+        )
 
 
 class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
@@ -257,39 +278,6 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
             raised.exception.detail,
             "Knowledge document not found",
         )
-
-    def test_search_diversifies_chunks_across_documents(self) -> None:
-        points = [
-            {
-                "id": f"book-{index}",
-                "score": 0.9 - index / 100,
-                "payload": {"document_id": "book"},
-            }
-            for index in range(10)
-        ]
-        points.extend(
-            [
-                {
-                    "id": "audio-1",
-                    "score": 0.6,
-                    "payload": {"document_id": "audio-1"},
-                },
-                {
-                    "id": "audio-2",
-                    "score": 0.5,
-                    "payload": {"document_id": "audio-2"},
-                },
-            ]
-        )
-
-        selected = knowledge_service.diversify_search_points(points, 5)
-
-        self.assertEqual(
-            [point["payload"]["document_id"] for point in selected[:3]],
-            ["book", "audio-1", "audio-2"],
-        )
-        self.assertEqual(len(selected), 5)
-
 
 class EndpointCompatibilityTests(unittest.TestCase):
     def test_generic_document_routes_are_exposed(self) -> None:

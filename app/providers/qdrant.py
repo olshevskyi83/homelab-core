@@ -5,6 +5,25 @@ import httpx
 from app.config import settings
 
 
+def flatten_point_groups(
+    groups: list[dict[str, Any]],
+    *,
+    limit: int,
+    group_size: int,
+) -> list[dict[str, Any]]:
+    points: list[dict[str, Any]] = []
+
+    for position in range(group_size):
+        for group in groups:
+            hits = group.get("hits") or []
+            if position < len(hits) and isinstance(hits[position], dict):
+                points.append(hits[position])
+                if len(points) >= limit:
+                    return points
+
+    return points
+
+
 async def available() -> bool:
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
@@ -37,6 +56,7 @@ async def ensure_collection(vector_size: int) -> None:
         raise ValueError("Vector size must be positive")
 
     if await collection_exists():
+        await ensure_document_id_index()
         return
 
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -56,6 +76,27 @@ async def ensure_collection(vector_size: int) -> None:
     if response.status_code not in {200, 201}:
         raise RuntimeError(
             f"Could not create Qdrant collection: "
+            f"HTTP {response.status_code}: {response.text[:2000]}"
+        )
+
+    await ensure_document_id_index()
+
+
+async def ensure_document_id_index() -> None:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.put(
+            f"{settings.qdrant_url}/collections/"
+            f"{settings.qdrant_collection}/index",
+            params={"wait": "true"},
+            json={
+                "field_name": "document_id",
+                "field_schema": "keyword",
+            },
+        )
+
+    if response.status_code not in {200, 201}:
+        raise RuntimeError(
+            "Could not create document_id payload index: "
             f"HTTP {response.status_code}: {response.text[:2000]}"
         )
 
@@ -207,3 +248,63 @@ async def search_points(
         for point in points
         if isinstance(point, dict)
     ]
+
+
+async def search_point_groups(
+    vector: list[float],
+    *,
+    limit: int = 5,
+    group_size: int = 2,
+    score_threshold: float | None = None,
+    source_type: str | None = None,
+    project: str | None = None,
+) -> list[dict[str, Any]]:
+    if not await collection_exists():
+        return []
+
+    must_filters: list[dict[str, Any]] = []
+
+    if source_type:
+        must_filters.append(
+            {"key": "source_type", "match": {"value": source_type}}
+        )
+
+    if project:
+        must_filters.append(
+            {"key": "project", "match": {"value": project}}
+        )
+
+    body: dict[str, Any] = {
+        "query": vector,
+        "group_by": "document_id",
+        "limit": limit,
+        "group_size": group_size,
+        "with_payload": True,
+        "with_vector": False,
+    }
+
+    if score_threshold is not None:
+        body["score_threshold"] = score_threshold
+
+    if must_filters:
+        body["filter"] = {"must": must_filters}
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.post(
+            f"{settings.qdrant_url}/collections/"
+            f"{settings.qdrant_collection}/points/query/groups",
+            json=body,
+        )
+
+    response.raise_for_status()
+    groups = response.json().get("result", {}).get("groups", [])
+
+    if not isinstance(groups, list):
+        return []
+
+    valid_groups = [group for group in groups if isinstance(group, dict)]
+    return flatten_point_groups(
+        valid_groups,
+        limit=limit,
+        group_size=group_size,
+    )
