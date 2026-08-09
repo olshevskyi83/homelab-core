@@ -13,7 +13,20 @@ from app.services import knowledge_service
 
 router = APIRouter(prefix="/v1", tags=["openai-compatible"])
 
-KNOWLEDGE_MODEL_ID = "homelab-knowledge"
+KNOWLEDGE_MODELS = {
+    "homelab-knowledge": {
+        "name": "Homelab Knowledge",
+        "project": None,
+    },
+    "homelab-audio": {
+        "name": "Homelab Audio",
+        "project": "audio-lab",
+    },
+    "homelab-documents": {
+        "name": "Homelab Documents",
+        "project": "document-lab",
+    },
+}
 
 
 class ChatMessage(BaseModel):
@@ -96,18 +109,21 @@ async def list_knowledge_models() -> dict:
         "object": "list",
         "data": [
             {
-                "id": KNOWLEDGE_MODEL_ID,
+                "id": model_id,
+                "name": config["name"],
                 "object": "model",
                 "created": 0,
                 "owned_by": "homelab-core",
             }
+            for model_id, config in KNOWLEDGE_MODELS.items()
         ],
     }
 
 
 @router.post("/chat/completions")
 async def knowledge_chat_completion(request: ChatCompletionRequest):
-    if request.model != KNOWLEDGE_MODEL_ID:
+    model_config = KNOWLEDGE_MODELS.get(request.model)
+    if model_config is None:
         raise HTTPException(status_code=404, detail="Model not found")
 
     try:
@@ -116,6 +132,7 @@ async def knowledge_chat_completion(request: ChatCompletionRequest):
             query,
             model=settings.knowledge_chat_model,
             conversation_messages=messages,
+            project=model_config["project"],
             temperature=request.temperature,
         )
     except ValueError as exc:
@@ -133,7 +150,7 @@ async def knowledge_chat_completion(request: ChatCompletionRequest):
                 "id": completion_id,
                 "object": "chat.completion.chunk",
                 "created": created,
-                "model": KNOWLEDGE_MODEL_ID,
+                "model": request.model,
                 "choices": [
                     {
                         "index": 0,
@@ -147,7 +164,7 @@ async def knowledge_chat_completion(request: ChatCompletionRequest):
                 "id": completion_id,
                 "object": "chat.completion.chunk",
                 "created": created,
-                "model": KNOWLEDGE_MODEL_ID,
+                "model": request.model,
                 "choices": [
                     {"index": 0, "delta": {}, "finish_reason": "stop"}
                 ],
@@ -161,7 +178,7 @@ async def knowledge_chat_completion(request: ChatCompletionRequest):
         "id": completion_id,
         "object": "chat.completion",
         "created": created,
-        "model": KNOWLEDGE_MODEL_ID,
+        "model": request.model,
         "choices": [
             {
                 "index": 0,

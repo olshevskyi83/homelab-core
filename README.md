@@ -61,7 +61,10 @@ Open WebUI can use Homelab Knowledge as an OpenAI-compatible model through:
 ```text
 GET  /v1/models
 POST /v1/chat/completions
-model: homelab-knowledge
+models:
+  homelab-knowledge  (all indexed sources)
+  homelab-audio      (Audio Lab only)
+  homelab-documents  (Document Lab only)
 ```
 
 The adapter searches the central Qdrant collection, sends the retrieved
