@@ -103,6 +103,11 @@ class Settings:
         "nomic-embed",
     )
 
+    knowledge_chat_model = os.environ.get(
+        "KNOWLEDGE_CHAT_MODEL",
+        "qwen-general",
+    )
+
     knowledge_chunk_size = int(
         os.environ.get("KNOWLEDGE_CHUNK_SIZE", "1200")
     )

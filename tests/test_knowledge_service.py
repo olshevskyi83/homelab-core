@@ -12,6 +12,12 @@ from fastapi import HTTPException
 
 from app.api.knowledge import delete_document as delete_document_endpoint
 from app.api.knowledge import router as knowledge_router
+from app.api.openai_knowledge import (
+    ChatCompletionRequest,
+    knowledge_chat_completion,
+    list_knowledge_models,
+    router as openai_knowledge_router,
+)
 from app.config import settings
 from app.services import knowledge_service
 
@@ -255,7 +261,11 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
 
 class EndpointCompatibilityTests(unittest.TestCase):
     def test_generic_document_routes_are_exposed(self) -> None:
-        routes = {(route.path, method) for route in knowledge_router.routes for method in route.methods}
+        routes = {
+            (route.path, method)
+            for route in knowledge_router.routes
+            for method in route.methods
+        }
         expected = {
             ("/knowledge/documents", "POST"),
             ("/knowledge/documents/{document_id}", "GET"),
@@ -267,8 +277,21 @@ class EndpointCompatibilityTests(unittest.TestCase):
         }
         self.assertTrue(expected.issubset(routes))
 
+    def test_openai_compatible_routes_are_exposed(self) -> None:
+        routes = {
+            (route.path, method)
+            for route in openai_knowledge_router.routes
+            for method in route.methods
+        }
+        self.assertIn(("/v1/models", "GET"), routes)
+        self.assertIn(("/v1/chat/completions", "POST"), routes)
+
     def test_audio_lab_index_routes_remain_exposed(self) -> None:
-        routes = {(route.path, method) for route in audio_lab_router.routes for method in route.methods}
+        routes = {
+            (route.path, method)
+            for route in audio_lab_router.routes
+            for method in route.methods
+        }
         expected = {
             ("/audio-lab/tasks", "GET"),
             ("/audio-lab/tasks/{task_id}/index", "POST"),
@@ -277,6 +300,51 @@ class EndpointCompatibilityTests(unittest.TestCase):
         }
         self.assertTrue(expected.issubset(routes))
 
+
+class OpenAIKnowledgeCompatibilityTests(unittest.IsolatedAsyncioTestCase):
+    async def test_models_exposes_only_knowledge_model(self) -> None:
+        result = await list_knowledge_models()
+
+        self.assertEqual(result["data"][0]["id"], "homelab-knowledge")
+
+    async def test_chat_maps_history_and_sources_to_openai_response(self) -> None:
+        request = ChatCompletionRequest(
+            model="homelab-knowledge",
+            messages=[
+                {"role": "user", "content": "Перше питання"},
+                {"role": "assistant", "content": "Перша відповідь"},
+                {"role": "user", "content": "Уточни відповідь"},
+            ],
+        )
+        result = {
+            "answer": "Відповідь із бази.",
+            "sources": [
+                {
+                    "number": 1,
+                    "source_filename": "book.pdf",
+                    "score": 0.91,
+                }
+            ],
+            "usage": {"total_tokens": 10},
+        }
+
+        with patch.object(
+            knowledge_service,
+            "chat_with_knowledge",
+            AsyncMock(return_value=result),
+        ) as chat:
+            response = await knowledge_chat_completion(request)
+
+        self.assertEqual(response["object"], "chat.completion")
+        content = response["choices"][0]["message"]["content"]
+        self.assertIn("Відповідь із бази.", content)
+        self.assertIn("[1] book.pdf", content)
+        chat.assert_awaited_once()
+        self.assertEqual(chat.await_args.args[0], "Уточни відповідь")
+        self.assertEqual(
+            len(chat.await_args.kwargs["conversation_messages"]),
+            3,
+        )
 
 if __name__ == "__main__":
     unittest.main()

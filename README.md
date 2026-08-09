@@ -56,6 +56,19 @@ DELETE /knowledge/documents/{document_id}
 Interactive API documentation:
 http://homelab:3010/docs
 
+Open WebUI can use Homelab Knowledge as an OpenAI-compatible model through:
+
+```text
+GET  /v1/models
+POST /v1/chat/completions
+model: homelab-knowledge
+```
+
+The adapter searches the central Qdrant collection, sends the retrieved
+context and conversation history to `KNOWLEDGE_CHAT_MODEL`, and includes the
+matched source filenames in the assistant response. It does not create a
+second Open WebUI Knowledge index.
+
 Installation
 cp .env.example .env
 nano .env

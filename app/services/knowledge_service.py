@@ -389,6 +389,7 @@ async def chat_with_knowledge(
     query: str,
     *,
     model: str = "qwen-general",
+    conversation_messages: list[dict] | None = None,
     limit: int = 5,
     source_type: str | None = None,
     project: str | None = None,
@@ -445,19 +446,27 @@ async def chat_with_knowledge(
         "Сформуй чітку відповідь."
     )
 
+    messages: list[dict] = [
+        {
+            "role": "system",
+            "content": system_prompt,
+        }
+    ]
+
+    if conversation_messages:
+        messages.extend(conversation_messages[:-1])
+
+    messages.append(
+        {
+            "role": "user",
+            "content": user_prompt,
+        }
+    )
+
     completion = await litellm.chat_completion(
         {
             "model": model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
+            "messages": messages,
             "temperature": temperature,
         }
     )

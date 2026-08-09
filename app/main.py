@@ -11,6 +11,7 @@ from app.api import health
 from app.api import llm
 from app.api import knowledge
 from app.api import models
+from app.api import openai_knowledge
 from app.api import resources
 from app.api import tasks
 from app.api import whisper
@@ -83,6 +84,7 @@ app.include_router(models.router)
 app.include_router(resources.router)
 app.include_router(embeddings.router)
 app.include_router(tasks.router)
+app.include_router(openai_knowledge.router)
 
 
 @app.get("/")
