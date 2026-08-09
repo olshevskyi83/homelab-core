@@ -45,6 +45,13 @@ GET  /resources/mac
 GET  /tasks
 POST /tasks
 POST /v1/audio/transcriptions
+POST /knowledge/documents
+GET  /knowledge/documents/{document_id}
+GET  /knowledge/documents/{document_id}/status
+POST /knowledge/documents/{document_id}/index
+POST /knowledge/documents/{document_id}/reindex
+DELETE /knowledge/documents/{document_id}/index
+DELETE /knowledge/documents/{document_id}
 
 Interactive API documentation:
 http://homelab:3010/docs
@@ -53,6 +60,15 @@ Installation
 cp .env.example .env
 nano .env
 docker compose up -d --build
+
+Document Lab files are registered by absolute path or by a path relative to
+`DOCUMENTS_ROOT`. The Docker Compose Documents mount is read-only.
+
+`DELETE /knowledge/documents/{document_id}` is the source-agnostic removal
+operation for every Knowledge client. It deletes the document's vectors and
+records status `deleted`, but never deletes the source file owned by Audio Lab,
+Document Lab, or another ingestion application. Use the `/index` variant when
+the document should remain registered and available for reindexing.
 
 The external Docker network must already exist:
 docker network create ai-network

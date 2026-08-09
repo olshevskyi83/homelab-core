@@ -53,6 +53,70 @@ def split_text(text: str) -> list[str]:
     return chunks
 
 
+def resolve_document_path(path: str) -> Path:
+    documents_root = Path(settings.documents_root).resolve()
+    candidate = Path(path)
+
+    if not candidate.is_absolute():
+        candidate = documents_root / candidate
+
+    resolved = candidate.resolve()
+
+    if resolved == documents_root or documents_root not in resolved.parents:
+        raise ValueError("Document path is outside DOCUMENTS_ROOT")
+
+    if not resolved.exists():
+        raise FileNotFoundError(f"Document file not found: {resolved}")
+
+    if not resolved.is_file():
+        raise ValueError("Document path must point to a file")
+
+    return resolved
+
+
+async def register_document(
+    *,
+    path: str,
+    document_id: str | None = None,
+    source_type: str = "document",
+    project: str = "document-lab",
+    source_filename: str | None = None,
+) -> dict:
+    resolved = resolve_document_path(path)
+    normalized_id = (document_id or "").strip() or str(
+        uuid5(NAMESPACE_URL, str(resolved))
+    )
+    normalized_source_type = source_type.strip()
+    normalized_project = project.strip()
+
+    if not normalized_source_type or not normalized_project:
+        raise ValueError("Source type and project must not be blank")
+
+    existing = await knowledge_state.get_document(normalized_id)
+
+    if existing and existing.get("task_id"):
+        raise ValueError(
+            "Document ID belongs to an Audio Lab transcription"
+        )
+
+    return await knowledge_state.register_document(
+        document_id=normalized_id,
+        text_path=str(resolved),
+        source_type=normalized_source_type,
+        project=normalized_project,
+        source_filename=source_filename or resolved.name,
+    )
+
+
+async def get_document_status(document_id: str) -> dict:
+    document = await knowledge_state.get_document(document_id)
+
+    if document is None:
+        raise ValueError("Knowledge document not found")
+
+    return document
+
+
 async def register_completed_transcriptions() -> int:
     tasks, _ = await task_service.list_tasks(
         status=None,
@@ -109,11 +173,14 @@ async def index_document(document_id: str) -> dict:
     if not text_path_raw:
         raise ValueError("Transcription text path is missing")
 
-    text_path = Path(str(text_path_raw)).resolve()
-    audio_root = Path(settings.audio_root).resolve()
+    if document.get("task_id"):
+        text_path = Path(str(text_path_raw)).resolve()
+        audio_root = Path(settings.audio_root).resolve()
 
-    if audio_root not in text_path.parents:
-        raise ValueError("Text file is outside Audio root")
+        if text_path == audio_root or audio_root not in text_path.parents:
+            raise ValueError("Text file is outside Audio root")
+    else:
+        text_path = resolve_document_path(str(text_path_raw))
 
     if not text_path.exists():
         raise FileNotFoundError(
@@ -233,6 +300,30 @@ async def delete_document_index(document_id: str) -> dict:
         "document_id": document_id,
         "status": "not_indexed",
         "chunk_count": 0,
+    }
+
+
+async def delete_document(document_id: str) -> dict:
+    """Remove a document from Knowledge without touching its source file."""
+    document = await knowledge_state.get_document(document_id)
+
+    if document is None:
+        raise ValueError("Knowledge document not found")
+
+    # Do not report or record success unless Qdrant deletion succeeded.
+    await qdrant.delete_document(document_id)
+
+    await knowledge_state.set_status(
+        document_id,
+        "deleted",
+        chunk_count=0,
+        error=None,
+    )
+
+    return {
+        "document_id": document_id,
+        "index_deleted": True,
+        "status": "deleted",
     }
 
 

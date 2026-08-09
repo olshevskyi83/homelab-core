@@ -55,6 +55,70 @@ async def ensure_document(
         await database.close()
 
 
+async def register_document(
+    *,
+    document_id: str,
+    text_path: str,
+    source_type: str,
+    project: str,
+    source_filename: str,
+) -> dict[str, Any]:
+    database = await connect()
+
+    try:
+        await database.execute(
+            """
+            INSERT INTO knowledge_documents (
+                document_id,
+                task_id,
+                source_type,
+                project,
+                source_filename,
+                text_path,
+                index_status,
+                chunk_count,
+                updated_at
+            )
+            VALUES (?, NULL, ?, ?, ?, ?, 'not_indexed', 0, ?)
+            ON CONFLICT(document_id) DO UPDATE SET
+                source_type = excluded.source_type,
+                project = excluded.project,
+                source_filename = excluded.source_filename,
+                text_path = excluded.text_path,
+                index_status = CASE
+                    WHEN knowledge_documents.text_path = excluded.text_path
+                    THEN knowledge_documents.index_status
+                    ELSE 'not_indexed'
+                END,
+                chunk_count = CASE
+                    WHEN knowledge_documents.text_path = excluded.text_path
+                    THEN knowledge_documents.chunk_count
+                    ELSE 0
+                END,
+                error = NULL,
+                updated_at = excluded.updated_at
+            """,
+            (
+                document_id,
+                source_type,
+                project,
+                source_filename,
+                text_path,
+                utc_now(),
+            ),
+        )
+        await database.commit()
+
+        cursor = await database.execute(
+            "SELECT * FROM knowledge_documents WHERE document_id = ?",
+            (document_id,),
+        )
+        row = await cursor.fetchone()
+        return dict(row)
+    finally:
+        await database.close()
+
+
 async def get_document(
     document_id: str,
 ) -> dict[str, Any] | None:

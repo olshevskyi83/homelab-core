@@ -1,6 +1,30 @@
 from pydantic import BaseModel, Field
 
 
+class KnowledgeDocumentRegistration(BaseModel):
+    path: str = Field(min_length=1, max_length=4096)
+    document_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=255,
+    )
+    source_type: str = Field(
+        default="document",
+        min_length=1,
+        max_length=100,
+    )
+    project: str = Field(
+        default="document-lab",
+        min_length=1,
+        max_length=100,
+    )
+    source_filename: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=1024,
+    )
+
+
 class KnowledgeSearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=4000)
     limit: int = Field(default=5, ge=1, le=20)

@@ -62,6 +62,11 @@ class Settings:
         "/remote/Audio",
     )
 
+    documents_root = os.environ.get(
+        "DOCUMENTS_ROOT",
+        "/remote/Documents",
+    )
+
     whisper_worker_poll_seconds = float(
         os.environ.get(
             "WHISPER_WORKER_POLL_SECONDS",
