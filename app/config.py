@@ -64,7 +64,7 @@ class Settings:
 
     documents_root = os.environ.get(
         "DOCUMENTS_ROOT",
-        "/remote/Documents",
+        "/documents",
     )
 
     whisper_worker_poll_seconds = float(

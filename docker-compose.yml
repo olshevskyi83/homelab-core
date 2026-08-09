@@ -12,10 +12,13 @@ services:
     ports:
       - "3010:8080"
 
+    environment:
+      DOCUMENTS_ROOT: /documents
+
     volumes:
       - ./data:/app/data
       - /home/homelabuser/RemoteDrop/Audio:/remote/Audio
-      - /home/homelabuser/RemoteDrop/Documents:/remote/Documents:ro
+      - /home/homelabuser/RemoteDrop/Documents:/documents:ro
 
     networks:
       - ai-network

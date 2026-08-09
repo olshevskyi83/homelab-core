@@ -62,7 +62,9 @@ nano .env
 docker compose up -d --build
 
 Document Lab files are registered by absolute path or by a path relative to
-`DOCUMENTS_ROOT`. The Docker Compose Documents mount is read-only.
+`DOCUMENTS_ROOT`. By default the host directory
+`/home/homelabuser/RemoteDrop/Documents` is mounted read-only at `/documents`
+inside Homelab Core.
 
 `DELETE /knowledge/documents/{document_id}` is the source-agnostic removal
 operation for every Knowledge client. It deletes the document's vectors and
