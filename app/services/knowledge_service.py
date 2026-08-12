@@ -74,6 +74,102 @@ def resolve_document_path(path: str) -> Path:
     return resolved
 
 
+def resolve_audio_transcription_path(text_path: str) -> Path:
+    """Resolve an Audio Lab session transcript below AUDIO_ROOT only."""
+    candidate = Path(text_path)
+
+    if candidate.is_absolute():
+        raise ValueError("Transcription text path must be relative")
+
+    audio_root = Path(settings.audio_root).resolve()
+
+    try:
+        resolved = (audio_root / candidate).resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            "Transcription file not found under AUDIO_ROOT"
+        ) from exc
+
+    if resolved == audio_root or audio_root not in resolved.parents:
+        raise ValueError("Transcription text path is outside AUDIO_ROOT")
+
+    if not resolved.is_file():
+        raise ValueError("Transcription text path must point to a file")
+
+    return resolved
+
+
+# Knowledge Management
+# Presentation and lifecycle helpers below are owned by Homelab Core, not Labs.
+def source_is_available(document: dict) -> bool:
+    text_path = document.get("text_path")
+
+    if not text_path:
+        return False
+
+    try:
+        return Path(str(text_path)).is_file()
+    except OSError:
+        return False
+
+
+def document_for_management(document: dict) -> dict:
+    return {
+        "document_id": document.get("document_id"),
+        "task_id": document.get("task_id"),
+        "source_type": document.get("source_type"),
+        "project": document.get("project"),
+        "source_filename": document.get("source_filename"),
+        "index_status": document.get("index_status"),
+        "chunk_count": document.get("chunk_count"),
+        "embedding_model": document.get("embedding_model"),
+        "collection_name": document.get("collection_name"),
+        "indexed_at": document.get("indexed_at"),
+        "updated_at": document.get("updated_at"),
+        "error": document.get("error"),
+        "source_available": source_is_available(document),
+    }
+
+
+async def list_knowledge_documents(
+    *,
+    source_type: str | None = None,
+    project: str | None = None,
+    status: str | None = "active",
+    source_available: bool | None = None,
+    query: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
+    state_limit = None if source_available is not None else limit
+    state_offset = 0 if source_available is not None else offset
+    rows, total = await knowledge_state.query_documents(
+        source_type=source_type,
+        project=project,
+        status=status,
+        query=query,
+        limit=state_limit,
+        offset=state_offset,
+    )
+    documents = [document_for_management(row) for row in rows]
+
+    if source_available is not None:
+        documents = [
+            document
+            for document in documents
+            if document["source_available"] is source_available
+        ]
+        total = len(documents)
+        documents = documents[offset : offset + limit]
+
+    return {
+        "documents": documents,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
 async def register_document(
     *,
     path: str,
@@ -99,12 +195,60 @@ async def register_document(
             "Document ID belongs to an Audio Lab transcription"
         )
 
+    if (
+        existing
+        and Path(str(existing.get("text_path") or "")).resolve()
+        != resolved
+    ):
+        await qdrant.delete_document(normalized_id)
+
     return await knowledge_state.register_document(
         document_id=normalized_id,
         text_path=str(resolved),
         source_type=normalized_source_type,
         project=normalized_project,
         source_filename=source_filename or resolved.name,
+    )
+
+
+async def register_transcription(
+    *,
+    document_id: str,
+    text_path: str,
+    source_filename: str,
+) -> dict:
+    """Register a completed Audio Lab session transcript under AUDIO_ROOT."""
+    resolved = resolve_audio_transcription_path(text_path)
+    normalized_id = document_id.strip()
+    normalized_filename = source_filename.strip()
+
+    if not normalized_id or not normalized_filename:
+        raise ValueError("Document ID and source filename must not be blank")
+
+    existing = await knowledge_state.get_document(normalized_id)
+
+    if existing and (
+        existing.get("task_id")
+        or existing.get("source_type") != "transcription"
+        or existing.get("project") != "audio-lab"
+    ):
+        raise ValueError(
+            "Document ID belongs to a different Knowledge source"
+        )
+
+    if (
+        existing
+        and Path(str(existing.get("text_path") or "")).resolve()
+        != resolved
+    ):
+        await qdrant.delete_document(normalized_id)
+
+    return await knowledge_state.register_document(
+        document_id=normalized_id,
+        text_path=str(resolved),
+        source_type="transcription",
+        project="audio-lab",
+        source_filename=normalized_filename,
     )
 
 
@@ -173,7 +317,13 @@ async def index_document(document_id: str) -> dict:
     if not text_path_raw:
         raise ValueError("Transcription text path is missing")
 
-    if document.get("task_id"):
+    if (
+        document.get("task_id")
+        or (
+            document.get("source_type") == "transcription"
+            and document.get("project") == "audio-lab"
+        )
+    ):
         text_path = Path(str(text_path_raw)).resolve()
         audio_root = Path(settings.audio_root).resolve()
 
@@ -304,7 +454,7 @@ async def delete_document_index(document_id: str) -> dict:
 
 
 async def delete_document(document_id: str) -> dict:
-    """Remove a document from Knowledge without touching its source file."""
+    """Remove vectors and registry state without touching the source file."""
     document = await knowledge_state.get_document(document_id)
 
     if document is None:
@@ -313,18 +463,129 @@ async def delete_document(document_id: str) -> dict:
     # Do not report or record success unless Qdrant deletion succeeded.
     await qdrant.delete_document(document_id)
 
-    await knowledge_state.set_status(
-        document_id,
-        "deleted",
-        chunk_count=0,
-        error=None,
-    )
+    if not await knowledge_state.delete_document(document_id):
+        raise RuntimeError("Knowledge registry delete did not delete a row")
 
     return {
         "document_id": document_id,
         "index_deleted": True,
-        "status": "deleted",
+        "status": "removed",
     }
+
+
+async def purge_document_registry(document_id: str) -> dict:
+    """Compatibility cleanup for legacy rows with index_status=deleted."""
+    document = await knowledge_state.get_document(document_id)
+
+    if document is None:
+        raise ValueError("Knowledge document not found")
+
+    if document.get("index_status") != "deleted":
+        raise ValueError(
+            "Registry purge requires index_status=deleted"
+        )
+
+    if not await knowledge_state.purge_document(document_id):
+        raise RuntimeError("Knowledge registry purge did not delete a row")
+
+    return {
+        "document_id": document_id,
+        "status": "purged",
+    }
+
+
+def bulk_result(
+    document_id: str,
+    *,
+    status: str,
+    error: str | None = None,
+) -> dict:
+    return {
+        "document_id": document_id,
+        "status": status,
+        "error": error,
+    }
+
+
+async def bulk_document_operation(
+    document_ids: list[str],
+    operation: str,
+) -> dict:
+    results: list[dict] = []
+
+    for document_id in document_ids:
+        try:
+            if operation in {"index", "reindex"}:
+                result = await index_document(document_id)
+            elif operation == "retry":
+                document = await knowledge_state.get_document(document_id)
+
+                if document is None:
+                    raise ValueError("Knowledge document not found")
+
+                if document.get("index_status") != "failed":
+                    raise ValueError(
+                        "Retry requires index_status=failed"
+                    )
+
+                if not source_is_available(document):
+                    raise ValueError(
+                        "Retry requires an available source artifact"
+                    )
+
+                result = await index_document(document_id)
+            elif operation == "delete-index":
+                result = await delete_document_index(document_id)
+            elif operation == "delete":
+                result = await delete_document(document_id)
+            elif operation == "purge":
+                result = await purge_document_registry(document_id)
+            else:
+                raise ValueError(f"Unsupported bulk operation: {operation}")
+
+            results.append(
+                bulk_result(
+                    document_id,
+                    status=str(result.get("status") or "succeeded"),
+                )
+            )
+
+        except Exception as exc:
+            results.append(
+                bulk_result(
+                    document_id,
+                    status="failed",
+                    error=str(exc),
+                )
+            )
+
+    succeeded = sum(result["error"] is None for result in results)
+    return {
+        "requested": len(document_ids),
+        "succeeded": succeeded,
+        "failed": len(results) - succeeded,
+        "results": results,
+    }
+
+
+async def delete_all_documents() -> dict:
+    documents = await knowledge_state.list_documents()
+    return await bulk_document_operation(
+        [str(document["document_id"]) for document in documents],
+        "delete",
+    )
+
+
+async def purge_deleted_registry() -> dict:
+    """Compatibility cleanup for legacy rows with index_status=deleted."""
+    documents, _ = await knowledge_state.query_documents(
+        status="deleted",
+        limit=None,
+    )
+    return await bulk_document_operation(
+        [str(document["document_id"]) for document in documents],
+        "purge",
+    )
 
 
 async def search_knowledge(

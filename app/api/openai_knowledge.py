@@ -17,6 +17,8 @@ router = APIRouter(prefix="/v1", tags=["openai-compatible"])
 KNOWLEDGE_MODEL_ID = "homelab-knowledge"
 
 
+# Open WebUI Chat Boundary
+# Knowledge conversation belongs here, not in Audio/Document/Image Labs.
 class ChatMessage(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -85,12 +87,14 @@ def _answer_with_sources(result: dict) -> str:
         for number in re.findall(r"\[Джерело\s+(\d+)\]", answer)
     }
 
-    if cited_numbers:
-        sources = [
-            source
-            for source in sources
-            if source.get("number") in cited_numbers
-        ]
+    sources = [
+        source
+        for source in sources
+        if source.get("number") in cited_numbers
+    ]
+
+    if not sources:
+        return answer
 
     lines = ["", "---", "Джерела:"]
     for source in sources:

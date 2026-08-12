@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.api import audio_lab
 from app.api import dashboard
@@ -10,6 +11,7 @@ from app.api import embeddings
 from app.api import health
 from app.api import llm
 from app.api import knowledge
+from app.api import knowledge_manager_ui
 from app.api import models
 from app.api import openai_knowledge
 from app.api import resources
@@ -74,12 +76,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.mount(
+    "/knowledge-manager/assets",
+    StaticFiles(directory=knowledge_manager_ui.FRONTEND_ROOT),
+    name="knowledge-manager-assets",
+)
+
 app.include_router(audio_lab.router)
 app.include_router(dashboard.router)
 app.include_router(health.router)
 app.include_router(whisper.router)
 app.include_router(llm.router)
 app.include_router(knowledge.router)
+app.include_router(knowledge_manager_ui.router)
 app.include_router(models.router)
 app.include_router(resources.router)
 app.include_router(embeddings.router)

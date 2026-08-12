@@ -11,6 +11,8 @@ router = APIRouter(
 )
 
 
+# Local Artifact Management
+# Audio Lab owns recordings, transcription tasks, and local artifacts.
 @router.get("/tasks")
 async def audio_tasks(
     limit: int = Query(default=50, ge=1, le=200),
@@ -46,6 +48,8 @@ async def audio_tasks(
                 "language": task.payload.get("language"),
                 "result": task.result,
                 "error": task.error,
+                # Compatibility Layer: future Audio Lab UI should omit
+                # Knowledge status and link to Knowledge Manager instead.
                 "index": documents.get(task.id),
             }
             for task in tasks
@@ -54,7 +58,13 @@ async def audio_tasks(
     }
 
 
-@router.post("/tasks/{task_id}/index")
+# Compatibility Layer
+# Deprecated compatibility only. New Knowledge lifecycle capabilities
+# belong under /knowledge and must not be added to this router.
+@router.post(
+    "/tasks/{task_id}/index",
+    deprecated=True,
+)
 async def index_task(task_id: str) -> dict:
     try:
         return await knowledge_service.index_document(task_id)
@@ -70,7 +80,10 @@ async def index_task(task_id: str) -> dict:
         ) from exc
 
 
-@router.post("/tasks/{task_id}/reindex")
+@router.post(
+    "/tasks/{task_id}/reindex",
+    deprecated=True,
+)
 async def reindex_task(task_id: str) -> dict:
     try:
         return await knowledge_service.index_document(task_id)
@@ -86,7 +99,10 @@ async def reindex_task(task_id: str) -> dict:
         ) from exc
 
 
-@router.delete("/tasks/{task_id}/index")
+@router.delete(
+    "/tasks/{task_id}/index",
+    deprecated=True,
+)
 async def delete_task_index(task_id: str) -> dict:
     try:
         return await knowledge_service.delete_document_index(

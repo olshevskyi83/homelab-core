@@ -46,6 +46,7 @@ GET  /tasks
 POST /tasks
 POST /v1/audio/transcriptions
 POST /knowledge/documents
+POST /knowledge/transcriptions
 GET  /knowledge/documents/{document_id}
 GET  /knowledge/documents/{document_id}/status
 POST /knowledge/documents/{document_id}/index
@@ -84,11 +85,18 @@ Document Lab files are registered by absolute path or by a path relative to
 `/home/homelabuser/RemoteDrop/Documents` is mounted read-only at `/documents`
 inside Homelab Core.
 
+Audio Lab session transcripts use `POST /knowledge/transcriptions`. Its
+`text_path` must be relative to `AUDIO_ROOT`; Homelab Core resolves and checks
+the path itself, fixes the metadata to `transcription` and `audio-lab`, and
+does not accept a client-selected root or metadata fields.
+
 `DELETE /knowledge/documents/{document_id}` is the source-agnostic removal
 operation for every Knowledge client. It deletes the document's vectors and
-records status `deleted`, but never deletes the source file owned by Audio Lab,
-Document Lab, or another ingestion application. Use the `/index` variant when
-the document should remain registered and available for reindexing.
+then removes its Knowledge registry row, but never deletes the source file
+owned by Audio Lab, Document Lab, or another ingestion application. Use the
+`/index` variant when the document should remain registered and available for
+reindexing. Deprecated registry-purge routes remain only for cleanup of legacy
+rows that already have `index_status=deleted`.
 
 The external Docker network must already exist:
 docker network create ai-network

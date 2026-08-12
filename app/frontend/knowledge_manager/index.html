@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Knowledge Index</title>
+  <link rel="stylesheet" href="/knowledge-manager/assets/styles.css">
+</head>
+<body>
+  <main class="page-shell">
+    <header class="page-header">
+      <h1>Knowledge Index</h1>
+      <div class="statistics" aria-label="Knowledge index statistics">
+        <button class="stat" data-status-filter="indexed">
+          <span>Indexed</span><strong id="stat-indexed">—</strong>
+        </button>
+        <button class="stat" data-status-filter="not_indexed">
+          <span>Not indexed</span><strong id="stat-not-indexed">—</strong>
+        </button>
+        <button class="stat" data-status-filter="failed">
+          <span>Failed</span><strong id="stat-failed">—</strong>
+        </button>
+      </div>
+    </header>
+
+    <section class="filters" aria-label="Document filters">
+      <label class="search-field">
+        <span>Search</span>
+        <input id="filter-query" type="search"
+          placeholder="Filename" autocomplete="off">
+      </label>
+      <label>
+        <span>Type</span>
+        <input id="filter-type" list="type-options"
+          placeholder="All" autocomplete="off">
+        <datalist id="type-options">
+          <option value="document">Document</option>
+          <option value="transcription">Audio</option>
+          <option value="image">Image</option>
+          <option value="ocr">OCR</option>
+          <option value="web">Web</option>
+          <option value="email">Email</option>
+          <option value="git">Git</option>
+        </datalist>
+      </label>
+      <label>
+        <span>Status</span>
+        <select id="filter-status">
+          <option value="all">All</option>
+          <option value="indexed">Indexed</option>
+          <option value="not_indexed">Not indexed</option>
+          <option value="failed">Failed</option>
+        </select>
+      </label>
+      <label>
+        <span>Project</span>
+        <input id="filter-project" list="project-options"
+          placeholder="All" autocomplete="off">
+        <datalist id="project-options"></datalist>
+      </label>
+      <label>
+        <span>Source</span>
+        <select id="filter-source">
+          <option value="">All</option>
+          <option value="true">Available</option>
+          <option value="false">Not local</option>
+        </select>
+      </label>
+    </section>
+
+    <section id="bulk-toolbar" class="bulk-toolbar" hidden
+      aria-label="Selected document actions">
+      <span><strong id="selected-count">0</strong> selected</span>
+      <div class="button-group">
+        <button data-bulk-action="index">Index</button>
+        <button data-bulk-action="reindex">Reindex</button>
+        <button data-bulk-action="retry">Retry</button>
+        <button data-bulk-action="delete-index">Delete Index</button>
+        <button class="danger-text" data-bulk-action="delete">
+          Delete Knowledge
+        </button>
+      </div>
+    </section>
+
+    <div id="notice" class="notice" role="status" hidden></div>
+
+    <section class="table-region" aria-label="Knowledge documents">
+      <table>
+        <thead>
+          <tr>
+            <th class="select-column">
+              <input id="select-page" type="checkbox"
+                aria-label="Select all documents on this page">
+            </th>
+            <th aria-sort="none">
+              <button class="sort-button" data-sort-key="filename">
+                Filename <span class="sort-indicator" aria-hidden="true"></span>
+              </button>
+            </th>
+            <th>Type</th>
+            <th>Project</th>
+            <th aria-sort="none">
+              <button class="sort-button" data-sort-key="status">
+                Status <span class="sort-indicator" aria-hidden="true"></span>
+              </button>
+            </th>
+            <th class="numeric" aria-sort="none">
+              <button class="sort-button numeric-sort" data-sort-key="chunks">
+                Chunks <span class="sort-indicator" aria-hidden="true"></span>
+              </button>
+            </th>
+            <th>Source</th>
+            <th aria-sort="none">
+              <button class="sort-button" data-sort-key="updated">
+                Updated <span class="sort-indicator" aria-hidden="true"></span>
+              </button>
+            </th>
+            <th class="actions-column">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="documents-body"></tbody>
+      </table>
+      <div id="empty-state" class="empty-state" hidden>
+        No documents match the current filters.
+      </div>
+      <div id="loading-state" class="loading-state">Loading documents…</div>
+    </section>
+
+    <nav class="pagination" aria-label="Document pages">
+      <div>
+        <span id="range-label">0–0 of 0</span>
+      </div>
+      <div class="pagination-controls">
+        <label>
+          Rows
+          <select id="page-size">
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+          </select>
+        </label>
+        <button id="previous-page" disabled>Previous</button>
+        <span id="page-label">Page 1</span>
+        <button id="next-page" disabled>Next</button>
+      </div>
+    </nav>
+
+    <section class="danger-zone">
+      <div>
+        <h2>Danger zone</h2>
+        <p>
+          Deletes all items from Knowledge. Local source files are not
+          deleted.
+        </p>
+      </div>
+      <button id="delete-all-button" class="danger-button">
+        Delete ALL Knowledge
+      </button>
+    </section>
+  </main>
+
+  <dialog id="delete-all-dialog">
+    <form method="dialog">
+      <h2>Delete ALL Knowledge</h2>
+      <p>
+        Deletes all items from Knowledge. Local source files are not deleted.
+      </p>
+      <label>
+        Type <code>DELETE ALL KNOWLEDGE</code> to continue
+        <input id="delete-all-confirmation" type="text"
+          autocomplete="off" spellcheck="false">
+      </label>
+      <div class="dialog-actions">
+        <button value="cancel">Cancel</button>
+        <button id="confirm-delete-all" value="confirm"
+          class="danger-button" disabled>
+          Delete ALL Knowledge
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/knowledge-manager/assets/app.js" defer></script>
+</body>
+</html>
