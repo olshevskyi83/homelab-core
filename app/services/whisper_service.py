@@ -14,6 +14,7 @@ class WhisperService:
     def __init__(self) -> None:
         self.last_mac_use = 0.0
         self.active_mac_jobs = 0
+        self.active_backend: str | None = None
 
         self.state_lock = asyncio.Lock()
         self.start_lock = asyncio.Lock()
@@ -52,13 +53,18 @@ class WhisperService:
         content: bytes,
         content_type: str,
         fields: dict[str, str],
+        track_active_backend: bool = False,
     ) -> httpx.Response:
+        # The queue worker processes one Whisper task at a time. Direct
+        # OpenAI-compatible requests intentionally do not alter task runtime.
         mac_started = await self.ensure_mac_whisper()
 
         if mac_started:
             async with self.state_lock:
                 self.active_mac_jobs += 1
                 self.last_mac_use = time.time()
+                if track_active_backend:
+                    self.active_backend = "mac"
 
             try:
                 response = await mac_whisper.transcribe(
@@ -81,13 +87,24 @@ class WhisperService:
                         self.active_mac_jobs - 1,
                     )
                     self.last_mac_use = time.time()
+                    if track_active_backend:
+                        self.active_backend = None
 
-        return await server_whisper.transcribe(
-            filename=filename,
-            content=content,
-            content_type=content_type,
-            fields=fields,
-        )
+        if track_active_backend:
+            async with self.state_lock:
+                self.active_backend = "server"
+
+        try:
+            return await server_whisper.transcribe(
+                filename=filename,
+                content=content,
+                content_type=content_type,
+                fields=fields,
+            )
+        finally:
+            if track_active_backend:
+                async with self.state_lock:
+                    self.active_backend = None
 
     async def idle_watcher(self) -> None:
         while True:
@@ -113,10 +130,11 @@ class WhisperService:
                     async with self.state_lock:
                         self.last_mac_use = 0.0
 
-    async def runtime_status(self) -> tuple[int, int | None]:
+    async def runtime_status(self) -> tuple[int, int | None, str | None]:
         async with self.state_lock:
             active_jobs = self.active_mac_jobs
             last_use = self.last_mac_use
+            active_backend = self.active_backend
 
         idle_seconds = (
             max(0, int(time.time() - last_use))
@@ -124,7 +142,7 @@ class WhisperService:
             else None
         )
 
-        return active_jobs, idle_seconds
+        return active_jobs, idle_seconds, active_backend
 
 
 whisper_service = WhisperService()

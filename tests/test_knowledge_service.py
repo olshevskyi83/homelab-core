@@ -9,10 +9,12 @@ from pydantic import ValidationError
 
 os.environ.setdefault("MAC_AGENT_TOKEN", "test-token")
 
+from app.api.audio_lab import audio_tasks
 from app.api.audio_lab import router as audio_lab_router
 from fastapi import HTTPException
 
 from app.api.knowledge import delete_document as delete_document_endpoint
+from app.api.knowledge import list_documents as list_documents_endpoint
 from app.api.knowledge import router as knowledge_router
 from app.api.openai_knowledge import (
     ChatCompletionRequest,
@@ -27,9 +29,12 @@ from app.models.knowledge import (
     KnowledgePurgeDeletedRequest,
     KnowledgeTranscriptionRegistration,
 )
+from app.models.task import TaskCreate
+from app.models.task import TaskType
 from app.providers import qdrant
 from app.services import knowledge_service
 from app.services import knowledge_state
+from app.services import task_service
 from app.storage.database import initialize_database
 
 
@@ -190,11 +195,6 @@ class AudioTranscriptionRegistrationTests(
 
         with (
             patch.object(
-                knowledge_service,
-                "register_completed_transcriptions",
-                AsyncMock(return_value=0),
-            ),
-            patch.object(
                 knowledge_service.litellm,
                 "embeddings",
                 AsyncMock(return_value=[[0.1, 0.2]]),
@@ -236,11 +236,6 @@ class AudioTranscriptionRegistrationTests(
         }
 
         with (
-            patch.object(
-                knowledge_service,
-                "register_completed_transcriptions",
-                AsyncMock(return_value=0),
-            ),
             patch.object(
                 knowledge_service.knowledge_state,
                 "get_document",
@@ -295,6 +290,73 @@ class AudioTranscriptionRegistrationTests(
             await knowledge_state.get_document("audio-session-1")
         )
 
+        await initialize_database()
+        self.assertIsNone(
+            await knowledge_state.get_document("audio-session-1")
+        )
+
+    async def test_completed_audio_task_does_not_create_knowledge_record(
+        self,
+    ) -> None:
+        task = await task_service.create_task(
+            TaskCreate(
+                type=TaskType.WHISPER,
+                payload={"original_filename": "lesson.webm"},
+            )
+        )
+        claimed = await task_service.claim_next_task("whisper")
+        self.assertIsNotNone(claimed)
+        await task_service.complete_task(
+            task.id,
+            {"output_files": [str(self.transcript)]},
+        )
+
+        await audio_tasks(limit=50)
+
+        self.assertIsNone(await knowledge_state.get_document(task.id))
+        self.assertEqual(
+            (await knowledge_service.list_knowledge_documents())["total"],
+            0,
+        )
+
+    async def test_local_document_artifact_does_not_create_knowledge_record(
+        self,
+    ) -> None:
+        document = self.documents_root / "imported.txt"
+        document.write_text(
+            "Imported locally, but not ingested.",
+            encoding="utf-8",
+        )
+
+        result = await list_documents_endpoint(limit=50, offset=0)
+
+        self.assertEqual(result["total"], 0)
+        self.assertEqual(result["documents"], [])
+
+    async def test_explicit_registration_can_recreate_deleted_record(
+        self,
+    ) -> None:
+        await knowledge_service.register_transcription(
+            document_id="audio-session-1",
+            text_path="sessions/session-1/lesson.txt",
+            source_filename="Lesson.txt",
+        )
+        with patch.object(
+            knowledge_service.qdrant,
+            "delete_document",
+            AsyncMock(),
+        ):
+            await knowledge_service.delete_document("audio-session-1")
+
+        recreated = await knowledge_service.register_transcription(
+            document_id="audio-session-1",
+            text_path="sessions/session-1/lesson.txt",
+            source_filename="Lesson.txt",
+        )
+
+        self.assertEqual(recreated["index_status"], "not_indexed")
+        self.assertTrue(self.transcript.exists())
+
 
 class QdrantGroupingTests(unittest.TestCase):
     def test_flattens_one_hit_per_document_before_second_hits(self) -> None:
@@ -343,11 +405,12 @@ class KnowledgeStateQueryTests(unittest.IsolatedAsyncioTestCase):
             project="archive",
             source_filename="deleted-report.txt",
         )
-        await knowledge_state.ensure_document(
+        await knowledge_state.register_document(
             document_id="audio-1",
-            task_id="audio-1",
-            source_filename="meeting.wav",
             text_path=str(self.audio_source),
+            source_type="transcription",
+            project="audio-lab",
+            source_filename="meeting.wav",
         )
         await knowledge_state.set_status(
             "generic-1",
@@ -456,6 +519,17 @@ class KnowledgeStateQueryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "removed")
         self.assertIsNone(await knowledge_state.get_document("generic-1"))
         self.assertTrue(self.generic_source.exists())
+
+        await initialize_database()
+        rows, total = await knowledge_state.query_documents(
+            limit=50,
+            offset=0,
+        )
+        self.assertEqual(total, 1)
+        self.assertNotIn(
+            "generic-1",
+            {row["document_id"] for row in rows},
+        )
 
     async def test_delete_all_removes_rows_and_keeps_source_files(self) -> None:
         with patch.object(
@@ -1045,11 +1119,6 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch.object(
-                knowledge_service,
-                "register_completed_transcriptions",
-                AsyncMock(return_value=0),
-            ),
-            patch.object(
                 knowledge_service.knowledge_state,
                 "get_document",
                 AsyncMock(return_value=record),
@@ -1200,6 +1269,43 @@ class KnowledgeManagerUiTests(unittest.TestCase):
         self.assertNotIn('id="stat-deleted"', self.html)
         self.assertNotIn('option value="deleted"', self.html)
         self.assertNotIn('case "deleted"', self.javascript)
+
+    def test_delete_all_controls_are_absent(self) -> None:
+        self.assertNotIn("Delete ALL Knowledge", self.html)
+        self.assertNotIn("delete-all", self.javascript)
+        self.assertNotIn("DELETE ALL KNOWLEDGE", self.javascript)
+
+    def test_all_status_is_omitted_from_document_query(self) -> None:
+        self.assertNotIn("status: elements.status.value", self.javascript)
+        self.assertIn(
+            'if (elements.status.value !== "all") {',
+            self.javascript,
+        )
+        self.assertIn(
+            'params.set("status", elements.status.value);',
+            self.javascript,
+        )
+
+    def test_initial_load_refreshes_global_statistics(self) -> None:
+        self.assertIn(
+            "loadDocuments({refreshStats: true}).catch((error) => {",
+            self.javascript,
+        )
+
+    def test_bulk_actions_refresh_global_statistics(self) -> None:
+        self.assertIn(
+            "await loadDocuments({refreshStats: true});",
+            self.javascript,
+        )
+
+    def test_filter_reloads_do_not_refresh_global_statistics(self) -> None:
+        self.assertIn("function scheduleFilterReload() {", self.javascript)
+        filter_section = self.javascript.split(
+            "function scheduleFilterReload() {",
+            1,
+        )[1].split("elements.selectPage.addEventListener", 1)[0]
+        self.assertIn("loadDocuments();", filter_section)
+        self.assertNotIn("refreshStats", filter_section)
 
     def test_document_id_is_not_visible_ui_content(self) -> None:
         self.assertNotIn("Document ID", self.html)

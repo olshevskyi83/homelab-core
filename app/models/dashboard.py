@@ -27,8 +27,11 @@ class LLMDashboard(BaseModel):
 
 class WhisperDashboard(BaseModel):
     mac_agent: bool
+    mac_available: bool
     mac_running: bool
+    server_available: bool
     server_running: bool
+    active_backend: str | None
     active_jobs: int
     idle_seconds: int | None
     shutdown_after_seconds: int

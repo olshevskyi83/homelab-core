@@ -9,52 +9,6 @@ def utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-async def ensure_document(
-    *,
-    document_id: str,
-    task_id: str,
-    source_filename: str | None,
-    text_path: str | None,
-) -> None:
-    database = await connect()
-
-    try:
-        await database.execute(
-            """
-            INSERT INTO knowledge_documents (
-                document_id,
-                task_id,
-                source_type,
-                project,
-                source_filename,
-                text_path,
-                index_status,
-                chunk_count,
-                updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, 'not_indexed', 0, ?)
-            ON CONFLICT(document_id) DO UPDATE SET
-                source_filename = excluded.source_filename,
-                text_path = excluded.text_path,
-                updated_at = excluded.updated_at
-            """,
-            (
-                document_id,
-                task_id,
-                "transcription",
-                "audio-lab",
-                source_filename,
-                text_path,
-                utc_now(),
-            ),
-        )
-
-        await database.commit()
-
-    finally:
-        await database.close()
-
-
 async def register_document(
     *,
     document_id: str,

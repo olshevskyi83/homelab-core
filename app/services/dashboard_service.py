@@ -40,7 +40,7 @@ async def build_dashboard() -> DashboardResponse:
         server_whisper.available(),
     )
 
-    active_jobs, idle_seconds = (
+    active_jobs, idle_seconds, active_backend = (
         await whisper_service.runtime_status()
     )
 
@@ -93,8 +93,11 @@ async def build_dashboard() -> DashboardResponse:
 
         whisper=WhisperDashboard(
             mac_agent=mac_online,
+            mac_available=mac_online,
             mac_running=mac_whisper_ok,
+            server_available=server_whisper_ok,
             server_running=server_whisper_ok,
+            active_backend=active_backend,
             active_jobs=active_jobs,
             idle_seconds=idle_seconds,
             shutdown_after_seconds=(

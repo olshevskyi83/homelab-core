@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Knowledge Index</title>
-  <link rel="stylesheet" href="/knowledge-manager/assets/styles.css">
+  <link rel="stylesheet" href="/knowledge-manager/assets/styles.css?v=20260813-1">
 </head>
 <body>
   <main class="page-shell">
@@ -145,41 +145,8 @@
       </div>
     </nav>
 
-    <section class="danger-zone">
-      <div>
-        <h2>Danger zone</h2>
-        <p>
-          Deletes all items from Knowledge. Local source files are not
-          deleted.
-        </p>
-      </div>
-      <button id="delete-all-button" class="danger-button">
-        Delete ALL Knowledge
-      </button>
-    </section>
   </main>
 
-  <dialog id="delete-all-dialog">
-    <form method="dialog">
-      <h2>Delete ALL Knowledge</h2>
-      <p>
-        Deletes all items from Knowledge. Local source files are not deleted.
-      </p>
-      <label>
-        Type <code>DELETE ALL KNOWLEDGE</code> to continue
-        <input id="delete-all-confirmation" type="text"
-          autocomplete="off" spellcheck="false">
-      </label>
-      <div class="dialog-actions">
-        <button value="cancel">Cancel</button>
-        <button id="confirm-delete-all" value="confirm"
-          class="danger-button" disabled>
-          Delete ALL Knowledge
-        </button>
-      </div>
-    </form>
-  </dialog>
-
-  <script src="/knowledge-manager/assets/app.js" defer></script>
+  <script src="/knowledge-manager/assets/app.js?v=20260813-1" defer></script>
 </body>
 </html>

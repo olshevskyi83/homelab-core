@@ -72,17 +72,16 @@ symlink escapes are rejected. It fixes `source_type=transcription` and
 The folder watcher observes `AUDIO_ROOT/incoming`, waits for supported files
 to settle, moves them to `processing`, and creates Whisper tasks.
 
-In the current implementation, each completed Whisper transcription with a
-text output receives a separate Knowledge registration with:
+Completing a Whisper task creates only its local transcription artifact. It
+does not create a Knowledge registry entry automatically. Audio content enters
+Knowledge only through an explicit central ingestion request, currently
+`POST /knowledge/transcriptions`. The request caller supplies the stable
+`document_id`; task IDs may be used by an ingestion client but are not an
+automatic registration rule.
 
-- `document_id` equal to the task ID;
-- `source_type` set to `transcription`;
-- `project` set to `audio-lab`.
-
-This task-level representation is current implementation detail, not an
-immutable architectural rule. The ingestion representation may evolve while
-Homelab Core remains the owner of Knowledge. No alternative or session-level
-representation is implemented or claimed here.
+The ingestion representation may evolve while Homelab Core remains the owner
+of Knowledge. No alternative or session-level representation is implemented
+or claimed here.
 
 The `/audio-lab` routes provide an Audio Lab-oriented view and indexing
 operations over the same central Knowledge service.
@@ -105,8 +104,8 @@ Audio Lab can register one assembled session transcript through
 `POST /knowledge/transcriptions` with a stable session-derived `document_id`,
 a human-readable `source_filename`, and a relative path below `AUDIO_ROOT`.
 Repeated registration of the same ID updates the same registry record rather
-than creating another document. This explicit contract does not change the
-current task-per-transcription implementation described above.
+than creating another document. This is an explicit ingestion contract; task
+completion itself remains separate from Knowledge registration.
 
 ### Indexing
 

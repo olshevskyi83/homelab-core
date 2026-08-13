@@ -25,7 +25,7 @@ async def get_health() -> HealthResponse:
         get_schema_version(),
     )
 
-    active_jobs, idle_seconds = (
+    active_jobs, idle_seconds, _ = (
         await whisper_service.runtime_status()
     )
 

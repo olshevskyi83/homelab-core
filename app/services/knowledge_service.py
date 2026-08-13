@@ -6,7 +6,6 @@ from app.config import settings
 from app.providers import litellm
 from app.providers import qdrant
 from app.services import knowledge_state
-from app.services import task_service
 
 
 def utc_now() -> str:
@@ -261,52 +260,7 @@ async def get_document_status(document_id: str) -> dict:
     return document
 
 
-async def register_completed_transcriptions() -> int:
-    tasks, _ = await task_service.list_tasks(
-        status=None,
-        task_type="whisper",
-        limit=200,
-        offset=0,
-    )
-
-    registered = 0
-
-    for task in tasks:
-        if task.status.value != "completed" or not task.result:
-            continue
-
-        output_files = task.result.get("output_files") or []
-
-        text_path = next(
-            (
-                str(path)
-                for path in output_files
-                if str(path).lower().endswith(".txt")
-            ),
-            None,
-        )
-
-        await knowledge_state.ensure_document(
-            document_id=task.id,
-            task_id=task.id,
-            source_filename=(
-                task.payload.get("original_filename")
-                or Path(
-                    str(task.payload.get("file_path", ""))
-                ).name
-                or None
-            ),
-            text_path=text_path,
-        )
-
-        registered += 1
-
-    return registered
-
-
 async def index_document(document_id: str) -> dict:
-    await register_completed_transcriptions()
-
     document = await knowledge_state.get_document(document_id)
 
     if document is None:
@@ -430,8 +384,6 @@ async def index_document(document_id: str) -> dict:
 
 
 async def delete_document_index(document_id: str) -> dict:
-    await register_completed_transcriptions()
-
     document = await knowledge_state.get_document(document_id)
 
     if document is None:

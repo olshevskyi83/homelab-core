@@ -17,8 +17,6 @@ router = APIRouter(
 async def audio_tasks(
     limit: int = Query(default=50, ge=1, le=200),
 ) -> dict:
-    await knowledge_service.register_completed_transcriptions()
-
     documents = {
         item["task_id"]: item
         for item in await knowledge_state.list_documents()

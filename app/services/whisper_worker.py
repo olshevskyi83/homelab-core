@@ -98,6 +98,7 @@ class WhisperWorker:
                     or "application/octet-stream"
                 ),
                 fields=fields,
+                track_active_backend=True,
             )
 
             if response.status_code >= 400:

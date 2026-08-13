@@ -32,10 +32,6 @@ const elements = {
   pageSize: document.querySelector("#page-size"),
   previous: document.querySelector("#previous-page"),
   next: document.querySelector("#next-page"),
-  deleteAllButton: document.querySelector("#delete-all-button"),
-  deleteAllDialog: document.querySelector("#delete-all-dialog"),
-  deleteAllInput: document.querySelector("#delete-all-confirmation"),
-  deleteAllConfirm: document.querySelector("#confirm-delete-all"),
 };
 
 function statusLabel(status) {
@@ -117,12 +113,14 @@ function queryParameters() {
   const params = new URLSearchParams({
     limit: String(state.limit),
     offset: String(state.offset),
-    status: elements.status.value,
   });
   const query = elements.query.value.trim();
   const type = elements.type.value.trim();
   const project = elements.project.value.trim();
   if (query) params.set("query", query);
+  if (elements.status.value !== "all") {
+    params.set("status", elements.status.value);
+  }
   if (type) params.set("source_type", type);
   if (project) params.set("project", project);
   if (elements.source.value) {
@@ -511,34 +509,6 @@ document.addEventListener("click", (event) => {
   });
 });
 
-elements.deleteAllButton.addEventListener("click", () => {
-  elements.deleteAllInput.value = "";
-  elements.deleteAllConfirm.disabled = true;
-  elements.deleteAllDialog.showModal();
-  elements.deleteAllInput.focus();
-});
-elements.deleteAllInput.addEventListener("input", () => {
-  elements.deleteAllConfirm.disabled =
-    elements.deleteAllInput.value !== "DELETE ALL KNOWLEDGE";
-});
-elements.deleteAllDialog.addEventListener("close", async () => {
-  if (elements.deleteAllDialog.returnValue !== "confirm") return;
-  try {
-    showNotice("Deleting all Knowledge documents…");
-    const result = await apiRequest(`${API_ROOT}/delete-all`, {
-      method: "POST",
-      body: JSON.stringify({confirmation: "DELETE ALL KNOWLEDGE"}),
-    });
-    const message = `${result.succeeded} succeeded; ${result.failed} failed.`;
-    state.selected.clear();
-    state.offset = 0;
-    await loadDocuments({refreshStats: true});
-    showNotice(message, result.failed > 0);
-  } catch (error) {
-    showNotice(error.message, true);
-  }
-});
-
-Promise.all([loadDocuments(), loadStatistics()]).catch((error) => {
+loadDocuments({refreshStats: true}).catch((error) => {
   showNotice(error.message, true);
 });
